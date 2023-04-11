@@ -1,0 +1,13 @@
+{:paths ["src" "resources"]
+ :deps {}
+ :aliases {:dev {:classpath-overrides {org.clojure/clojure nil}
+                 :extra-deps {com.github.jpmonettas/clojure {:mvn/version "1.11.1-beta4"}
+                              com.github.jpmonettas/flow-storm-dbg {:mvn/version "3.4-beta-4" #_:local/root #_"/home/jmonetta/my-projects/flow-storm-debugger"}}
+                 :jvm-opts ["-Dproject-name=ClayVM"
+                            "-Dclojure.storm.traceEnable=true"
+                            "-Dclojure.storm.instrumentEnable=true"
+                            "-Dclojure.storm.instrumentOnlyPrefixes=user,clayvm"
+                            "-Dflowstorm.theme=dark"
+                            ;; "-Dflowstorm.fnExpressionsLimit=50"
+
+                            ]}}}
