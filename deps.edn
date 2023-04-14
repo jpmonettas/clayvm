@@ -1,8 +1,8 @@
 {:paths ["src" "resources"]
  :deps {}
  :aliases {:dev {:classpath-overrides {org.clojure/clojure nil}
-                 :extra-deps {com.github.jpmonettas/clojure {:mvn/version "1.11.1-beta4"}
-                              com.github.jpmonettas/flow-storm-dbg {:mvn/version "3.4-beta-4" #_:local/root #_"/home/jmonetta/my-projects/flow-storm-debugger"}}
+                 :extra-deps {com.github.jpmonettas/clojure {:mvn/version "1.11.1-beta6"}
+                              com.github.jpmonettas/flow-storm-dbg {#_#_:mvn/version "3.4-beta-9" :local/root "/home/jmonetta/my-projects/flow-storm-debugger"}}
                  :jvm-opts ["-Dproject-name=ClayVM"
                             "-Dclojure.storm.traceEnable=true"
                             "-Dclojure.storm.instrumentEnable=true"

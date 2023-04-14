@@ -30,7 +30,7 @@
   (case t
     :u4 (.readInt dis)
     :u2 (.readUnsignedShort dis)
-    :u1 (.readByte dis)))
+    :u1 (.readUnsignedByte dis)))
 
 (defn read-bytes [dis desc]
   (reduce (fn [r [field-type field-name]]
@@ -58,7 +58,7 @@
   (-> (read-type-desc dis :u1)
       cp-info-tag))
 
-(defn read-cp-method-ref [dis]
+(defn read-cp-method-interface-or-field-ref [dis]
   (read-bytes dis [[:u2 :class-index]
                    [:u2 :name-and-type-index]]))
 
@@ -75,14 +75,17 @@
     (.read dis bytes)
     (assoc res :bytes (String. bytes))))
 
+(defn read-cp-contant-string [dis]
+  {:string-index (read-type-desc dis :u2)})
+
 (defn read-cp-info [dis]
   (let [tag (read-cp-tag dis)
         cp-info (case tag
                   :CONSTANT_Class (read-cp-constant-class dis)
-                  :CONSTANT_Fieldref (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_Fieldref}))
-                  :CONSTANT_Methodref (read-cp-method-ref dis)
-                  :CONSTANT_InterfaceMethodref (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_InterfaceMethodref}))
-                  :CONSTANT_String (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_String}))
+                  :CONSTANT_Fieldref (read-cp-method-interface-or-field-ref dis)
+                  :CONSTANT_Methodref (read-cp-method-interface-or-field-ref dis)
+                  :CONSTANT_InterfaceMethodref (read-cp-method-interface-or-field-ref dis)
+                  :CONSTANT_String (read-cp-contant-string dis)
                   :CONSTANT_Integer (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_Integer}))
                   :CONSTANT_Float (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_Float}))
                   :CONSTANT_Long (throw (ex-info "Tag not imlemented" {:tag :CONSTANT_Long}))
@@ -132,21 +135,64 @@
       indices
       (recur (dec i) (read-type-desc dis :u2)))))
 
+(defn read-unsigned-bytes [dis cnt]
+  (loop [i 0
+         bs []]
+    (if (< i cnt)
+      (recur (inc i) (conj bs (.readUnsignedByte dis)))
+      bs)))
+
+(defn parse-code-attribute [attr-bytes]
+  (let [dis (DataInputStream. (io/input-stream attr-bytes))
+        max-stack (read-type-desc dis :u2)
+        max-locals (read-type-desc dis :u2)
+        code-length (read-type-desc dis :u4)
+        code-bytes (read-unsigned-bytes dis code-length)]
+    {:attr/type :Code
+     :code-bytes code-bytes}))
+
+(defn parse-attribute [attr-name attr-bytes]
+  (case attr-name
+    "Code" (parse-code-attribute attr-bytes)
+     "ConstantValue" {:attr/type :ConstantValue}
+     "StackMapTable" {:attr/type :StackMapTable}
+     "Exceptions" {:attr/type :Exceptions}
+     "InnerClasses" {:attr/type :InnerClasses}
+     "EnclosingMethod" {:attr/type :EnclosingMethod}
+     "Synthetic" {:attr/type :Synthetic}
+     "Signature" {:attr/type :Signature}
+     "SourceFile" {:attr/type :SourceFile}
+     "SourceDebugExtension" {:attr/type :SourceDebugExtension}
+     "LineNumberTable" {:attr/type :LineNumberTable}
+     "LocalVariableTable" {:attr/type :LocalVariableTable}
+     "LocalVariableTypeTable" {:attr/type :LocalVariableTypeTable}
+     "Deprecated" {:attr/type :Deprecated}
+     "RuntimeVisibleAnnotations" {:attr/type :RuntimeVisibleAnnotations}
+     "RuntimeInvisibleAnnotations" {:attr/type :RuntimeInvisibleAnnotations}
+     "RuntimeVisibleParameterAnnotations" {:attr/type :RuntimeVisibleParameterAnnotations}
+     "RuntimeInvisibleParameterAnnotations" {:attr/type :RuntimeInvisibleParameterAnnotations}
+     "AnnotationDefault" {:attr/type :AnnotationDefault}
+     "BootstrapMethods" {:attr/type :BootstrapMethods}
+    (throw (ex-info "Unkown attribute" {:attr-name attr-name
+                                        :attr-bytes attr-bytes}))))
+
 (defn read-attribute [dis cons-pool-table]
   (let [attr-info (read-bytes dis [[:u2 :attribute-name-index]
                                    [:u4 :attribute-length]])
+        attr-name (-> attr-info
+                      :attribute-name-index
+                      cons-pool-table
+                      :bytes)
         attr-bytes (byte-array (:attribute-length attr-info))]
     (.read dis attr-bytes)
-    (-> attr-info
-        (update :attribute-name-index cons-pool-table)
-        (assoc :attribute-bytes attr-bytes))))
+    (parse-attribute attr-name attr-bytes)))
 
 (defn read-attributes [dis cnt cons-pool-table]
   (loop [i cnt
          attrs []]
     (if (zero? i)
       attrs
-      (recur (dec i) (read-attribute dis cons-pool-table)))))
+      (recur (dec i) (conj attrs (read-attribute dis cons-pool-table))))))
 
 (defn read-field-or-method-info [dis cons-pool-table]
   (let [field-info (read-bytes dis [[:u2 :access-flags]
@@ -166,7 +212,8 @@
          xs []]
     (if (zero? i)
       xs
-      (recur (dec i) (read-field-or-method-info dis cons-pool-table)))))
+      (recur (dec i)
+             (conj xs (read-field-or-method-info dis cons-pool-table))))))
 
 (defn read-constant-pool-table [dis cnt]
   (loop [i (dec cnt)
@@ -211,7 +258,7 @@
          :interfaces-indices interfaces-indices
          :fields fields
          :methods methods
-         :attributes attributes}
+         :class-attributes attributes}
 
         ))))
 
